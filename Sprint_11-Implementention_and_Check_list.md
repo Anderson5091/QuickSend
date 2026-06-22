@@ -20,7 +20,7 @@ This plan outlines the implementation of Sprint 11 for the QuickSend ecosystem. 
 ### 1. Database Schema — Agent Models
 
 #### [MODIFY] [schema.prisma](file:///C:/Anderson/Quick.Money/QuickSend/backend-app/prisma/schema.prisma) & [rail-backend schema.prisma](file:///C:/Anderson/Quick.Money/QuickSend/rail-backend/prisma/schema.prisma)
-- Added **Agent** model — core agent entity with `type` (PARTNER | INTERNAL), `status`, `kpiRating`, `totalRewards`, timestamps
+- Added **Agent** model — core agent entity with `type` (PARTNER | INTERNAL), `status`, `kpiRating`, `totalRewards`, `commissionLedger`, timestamps
 - Added **AgentWallet** model — per-agent wallets: `BASE_TREASURY` (partner only, pre-funded USDT) and `COMMISSION` (both types, earned fees)
 - Added **AgentTransaction** model — ledger for all agent operations: `ADD_BALANCE`, `WITHDRAW`, `PAYMENT`, `COMMISSION`, `TOPUP`
 - Added **AgentKpi** model — DAILY / WEEKLY / MONTHLY rollup of volume, commission, tx count, reward points, rating score
@@ -29,13 +29,16 @@ This plan outlines the implementation of Sprint 11 for the QuickSend ecosystem. 
 
 #### [NEW] [agent.service.ts](file:///C:/Anderson/Quick.Money/QuickSend/backend-app/src/modules/agent/agent.service.ts)
 - **`addUserBalance(agentId, userId, fiatAmount, usdtAmount, commissionPercent)`**
-  - Partner: deducts `usdtAmount` from own `BASE_TREASURY`, credits `commission` to own `COMMISSION`, credits `netUsdt` to user's wallet ledger
-  - Internal: deducts from system `HOT` treasury wallet, credits `commission` to own `COMMISSION`, credits `netUsdt` to user's wallet ledger
+  - Partner: deducts `usdtAmount` from own `BASE_TREASURY`, credits `commission` to agent's `commissionLedger`, credits `netUsdt` to user's wallet ledger
+  - Internal: deducts from system `HOT` treasury wallet, credits `commission` to agent's `commissionLedger`, credits `netUsdt` to user's wallet ledger
   - Auto-records KPI entry
 - **`executeWithdrawal(agentId, userId, amount, destAddress, commissionPercent)`**
-  - Debits user's wallet ledger, credits `commission` to agent's `COMMISSION` wallet
+  - Debits user's wallet ledger, credits `commission` to agent's `commissionLedger`
 - **`processGlobalPayment(agentId, userId, amount, paymentMethod, commissionPercent)`**
-  - Debits user's wallet ledger, credits full `commission` to agent's `COMMISSION` wallet
+  - Debits user's wallet ledger, credits `commission` to agent's `commissionLedger`
+- **`withdrawCommission(agentId)`**
+  - Checks `commissionLedger >= $10`, moves full balance to agent's `COMMISSION` wallet
+  - Creates a `COMMISSION` type transaction record with `fromLedger: true` metadata
 - **`topUpPartnerBalance(internalAgentId, partnerAgentId, usdtAmount)`**
   - Only Internal agents can call this. Deducts from system `HOT` treasury, credits partner's `BASE_TREASURY`
 - **`getAgentDashboard(agentId)`** — full agent overview with wallet balances, today's stats, recent transactions
@@ -55,6 +58,7 @@ This plan outlines the implementation of Sprint 11 for the QuickSend ecosystem. 
 - `POST /api/v1/agent/:id/withdraw` — [AGENT_PARTNER, AGENT_INTERNAL] execute user withdrawal with commission
 - `POST /api/v1/agent/:id/process-payment` — [AGENT_PARTNER, AGENT_INTERNAL] process global payment with commission
 - `POST /api/v1/agent/topup-partner` — [AGENT_INTERNAL] top up partner's base treasury
+- `POST /api/v1/agent/:id/withdraw-commission` — [AGENT_PARTNER, AGENT_INTERNAL] withdraw accrued commission ledger to wallet (min $10)
 - `GET /api/v1/agent/:id/kpi` — [authenticated] get agent KPI rollups
 - `GET /api/v1/agent/:id/transactions` — [authenticated] get agent transaction history
 
@@ -124,7 +128,9 @@ This plan outlines the implementation of Sprint 11 for the QuickSend ecosystem. 
 | `backend-app/src/app.ts` | Registered agent routes |
 | `backend-app/src/config/database.ts` | Extended PrismaClient interface |
 | `backend-app/prisma/seed.ts` | Added 2 agent seed accounts |
-| `admin-app/src/features/admin/admin.types.ts` | Agent type definitions |
+| `backend-app/prisma.config.ts` | Fixed Prisma 7 config format (`datasource.url`) with dotenv support |
+| `backend-app/src/modules/agent/agent-auth.routes.ts` | Added `commissionLedgerBalance` to `/me` response |
+| `admin-app/src/features/admin/admin.types.ts` | Agent type definitions + `commissionLedgerBalance` field |
 | `admin-app/src/features/admin/roles.ts` | `/agents` page permission |
 | `admin-app/src/features/admin/admin.api.ts` | Agent API methods + mocks |
 | `admin-app/src/features/admin/admin.store.ts` | Agent state management |
@@ -147,8 +153,10 @@ This plan outlines the implementation of Sprint 11 for the QuickSend ecosystem. 
 - `POST /api/v1/agent/create` with admin token → create PARTNER + INTERNAL agents
 - `GET /api/v1/agent/list` → verify both agent types appear with wallet info
 - `POST /api/v1/agent/auth/login` as `partner@quicksend.com` → get agent token with `AGENT_PARTNER` role
-- `POST /api/v1/agent/:id/add-balance` with agent token → verify user balance credited, agent treasury debited, commission credited
-- `POST /api/v1/agent/:id/withdraw` with agent token → verify user debited, commission to agent wallet
+- `POST /api/v1/agent/:id/add-balance` with agent token → verify user balance credited, agent treasury debited, commission credited to `commissionLedger` (NOT directly to wallet)
+- `POST /api/v1/agent/:id/withdraw` with agent token → verify user debited, commission to `commissionLedger`
+- `POST /api/v1/agent/:id/withdraw-commission` with agent token → verify commission moves from ledger to `COMMISSION` wallet (fails if < $10)
+- `GET /api/v1/agent/auth/me` and `GET /api/v1/agent/:id` → verify `commissionLedgerBalance` field is present
 - `POST /api/v1/agent/topup-partner` with internal agent token → verify partner's BASE_TREASURY increased
 - `GET /api/v1/agent/:id/kpi` → verify KPI entries recorded after operations
 - Admin UI: Navigate to `/agents` → verify agent list renders
@@ -161,17 +169,18 @@ This plan outlines the implementation of Sprint 11 for the QuickSend ecosystem. 
 # Sprint 11 Local Agent System Tasks
 
 - `[x]` Database Schema
-  - `[x]` Agent model
+  - `[x]` Agent model (`commissionLedger` added)
   - `[x]` AgentWallet model
   - `[x]` AgentTransaction model
   - `[x]` AgentKpi model
   - `[x]` Prisma generate (0 errors)
 - `[x]` Agent Service
-  - `[x]` addUserBalance (Partner: own treasury; Internal: system HOT)
-  - `[x]` executeWithdrawal
-  - `[x]` processGlobalPayment
+  - `[x]` addUserBalance (commissions credit `commissionLedger` instead of wallet)
+  - `[x]` executeWithdrawal (commissions credit `commissionLedger`)
+  - `[x]` processGlobalPayment (commissions credit `commissionLedger`)
+  - `[x]` withdrawCommission (transfer ledger to wallet, min $10)
   - `[x]` topUpPartnerBalance
-  - `[x]` getAgentDashboard
+  - `[x]` getAgentDashboard (returns `commissionLedgerBalance`)
   - `[x]` getAgentKpi
   - `[x]` recordKpi (DAILY/WEEKLY/MONTHLY upsert)
 - `[x]` Agent Auth Routes
@@ -185,6 +194,7 @@ This plan outlines the implementation of Sprint 11 for the QuickSend ecosystem. 
   - `[x]` POST /:id/add-balance (agent)
   - `[x]` POST /:id/withdraw (agent)
   - `[x]` POST /:id/process-payment (agent)
+  - `[x]` POST /:id/withdraw-commission (agent, min $10)
   - `[x]` POST /topup-partner (internal agent only)
   - `[x]` GET /:id/kpi
   - `[x]` GET /:id/transactions
@@ -193,8 +203,8 @@ This plan outlines the implementation of Sprint 11 for the QuickSend ecosystem. 
   - `[x]` agentAuthRoutes mounted at /api/v1/agent/auth
   - `[x]` ExtendedPrismaClient interface updated
 - `[x]` Admin Frontend — Types & API
-  - `[x]` Agent types in admin.types.ts
-  - `[x]` Agent API methods + mocks
+  - `[x]` Agent types in admin.types.ts (`commissionLedgerBalance` added)
+  - `[x]` Agent API methods + mocks (`commissionLedgerBalance` in mock returns)
   - `[x]` Agent store state + actions
   - `[x]` Role permission for /agents page
 - `[x]` Admin Frontend — UI
@@ -206,11 +216,18 @@ This plan outlines the implementation of Sprint 11 for the QuickSend ecosystem. 
   - `[x]` KPI table with DAILY/WEEKLY/MONTHLY toggle
   - `[x]` Transactions table
   - `[x]` Wallets display
-  - `[x]] Toggle agent status button
+  - `[x]` Toggle agent status button
 - `[x]` Seed Data
   - `[x]` partner@quicksend.com (PARTNER, 100k base + 5k commission)
   - `[x]` internal@quicksend.com (INTERNAL, 2.5k commission)
+- `[x]` Infrastructure
+  - `[x]` Fixed Prisma 7 config (`prisma.config.ts`) — `datasource.url` format with dotenv
+  - `[x]` Added `commissionLedger` column to Agent table via `prisma db push`
+  - `[x]` Prisma generate — Backend (0 errors)
 - `[x]` Verification
   - `[x]` TypeScript build check — Backend (0 errors)
   - `[x]` TypeScript build check — Admin (0 errors)
-  - `[x]` Prisma generate — Backend (0 errors)
+  - `[x]` `GET /agent/me` returns `commissionLedgerBalance`
+  - `[x]` `GET /agent/:id` dashboard returns `commissionLedgerBalance`
+  - `[x]` `GET /agent/list` includes `commissionLedgerBalance`
+  - `[x]` `POST /agent/:id/withdraw-commission` requires ≥ $10 balance

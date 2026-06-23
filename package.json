@@ -1,0 +1,9 @@
+{
+  "name": "quicksend",
+  "private": true,
+  "scripts": {
+    "app:push": "powershell -ExecutionPolicy Bypass -File ./sync-to-git.ps1",
+    "app:push:fast": "powershell -ExecutionPolicy Bypass -File ./sync-to-git.ps1 -SkipBuild",
+    "sync:rail": "powershell -ExecutionPolicy Bypass -File ./sync-to-rail.ps1 -Push"
+  }
+}

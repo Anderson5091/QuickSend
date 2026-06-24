@@ -93,3 +93,20 @@ WALLET_RECOVERY_SECRET=xmsk1_...
 - **Bootstrap**: `rail-backend/src/modules/treasury/treasury-bootstrap.service.ts`
 - **Model**: `TreasuryWallet` in Prisma schema (walletType, chain, network, address, status)
 - **DB**: All 12 addresses stored with status `ACTIVE`
+
+# secret code creation
+
+Method 2: Using Openssl (Terminal)
+If you prefer using your terminal directly:
+
+Bash
+openssl rand -hex 32
+Where to Store It
+Once generated, never hardcode this secret into your codebase. Treat it with the same level of security as a database password or private key.
+
+Add it to your environment variables file (.env):
+the exact match with the first on can be create like this: "xmsk1_" + (openssl rand -hex 32)
+Code snippet
+# .env
+RECOVERY_SECRET=your_generated_64_character_hex_string_here
+CROSSMINT_SERVER_API_KEY=sk_staging_...

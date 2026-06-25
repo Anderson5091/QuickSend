@@ -238,6 +238,10 @@ Temporary Deposit Wallet
 
 ↓
 
+Collection Wallet
+
+↓
+
 Hot Treasury Wallet
 
 Temporary wallet status:
@@ -525,6 +529,10 @@ Treasury Service
 
 ↓
 
+Collection Wallet
+
+↓
+
 Hot Treasury
 
 ↓
@@ -574,6 +582,7 @@ QUICK SEND + CROSSMINT IMPLEMENTATION
 Crossmint Wallet Inventory
 
 At system bootstrap create permanent treasury wallets:
+
 
 HOT_TREASURY_WALLET
 
@@ -712,12 +721,12 @@ Decision:
 APPROVED
 BLOCKED
 MANUAL_REVIEW
-Sweep To Hot Treasury
+Sweep To Collection Wallet
 
 After approval:
 
 await depositWallet.send(
-  HOT_TREASURY_ADDRESS,
+  COLLECTION_WALLET_ADDRESS,
   "usdt",
   amount
 );
@@ -857,6 +866,18 @@ await warmWallet.send(
 Event:
 
 treasury.refilled.v1
+Collection → Hot Flow
+
+Every few minutes:
+
+await collectionWallet.send(
+  HOT_WALLET_ADDRESS,
+  "usdt",
+  sweepAmount
+);
+
+This keeps deposits separated from withdrawal liquidity.
+
 Recommended Crossmint Configuration
 Base Network
 
@@ -893,7 +914,9 @@ Receive Funds
      ↓
 AML Check
      ↓
-Sweep To Hot Treasury
+Sweep To Collection Wallet
+     ↓
+Move To Hot Treasury
      ↓
 Credit User Balance
 

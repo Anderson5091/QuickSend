@@ -606,4 +606,5 @@ Together they form a complete international financial ecosystem.
 
 Quick Send
 
-"Send USDT. Deliver Money Anywhere."
+"Send Money
+Globally. Instantly."

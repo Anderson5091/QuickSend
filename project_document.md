@@ -1,5 +1,13 @@
 # QUICK SEND
 
+## Version History
+
+| Version | Date | Changes |
+|---|---|---|
+| 1.0 | June 2026 | Initial release |
+| 1.1 (Sprint 11) | June 2026 | Added Local Agent System, new DB schema, admin UI, API endpoints, seed data |
+
+
 ## Global Stablecoin Remittance Network
 
 Version: 1.0

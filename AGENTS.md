@@ -50,3 +50,10 @@ rail-backend/     Mirror of backend-app deployed to Railway (separate git repo)
 - If API returns 403 (Forbidden): current user role isn't in the route's `requireRole(...)` list
 - The `rail-backend/dist/` on disk may differ from what Railway serves. Railway builds fresh from source.
 - Route changes in `backend-app/src/` need sync + push to reach production
+
+## Progress
+### Done
+- Reverted changes to enforce separate rows for transfer and activity (payout) in agent activity:
+  - Backend endpoint `GET /agent/:id/transactions` returns raw transaction types (TRANSFER and PAYOUT) without enrichment.
+  - Frontend AgentActivity.tsx renders each transaction as a row with its type (TRANSFER or PAYOUT) and does not merge or add extra payout status columns.
+  - This ensures that transfers and payouts appear as distinct rows in the activity feed, allowing users to see both types separately.

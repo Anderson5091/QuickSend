@@ -19,7 +19,7 @@ Custody determines who holds the cryptographic keys that control a wallet. In tr
 ## wallet locator
 A wallet locator is a string that identifies a specific wallet across all Crossmint APIs and SDKs. Instead of tracking raw blockchain addresses, you reference wallets by a user identity (email, user ID, phone number, or social handle) combined with chain and wallet type information.
 
-* we use user id
+* we use user ID
 ### User Type
 The user type specifies how the wallet owner is identified. You can use an email, your app’s internal user ID, a phone number, a social handle, or the me shorthand for client-side contexts. You can also pass a raw wallet address directly.
 
@@ -31,4 +31,4 @@ twitter	Twitter/X handle	twitter:johndoe
 x	Alias for twitter	x:johndoe
 me	Authenticated user (client-side only)	me
 
-* we use userId type
+* we use type userId

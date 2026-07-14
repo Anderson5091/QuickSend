@@ -43,3 +43,31 @@ rail-backend/     Mirror of backend-app deployed to Railway (separate git repo)
 - `admin-app/src/api/client.ts`: axios instance with `baseURL: ENV.API_URL` (default: `https://corequicksend.up.railway.app/api/v1`)
 - Auth token attached via `Authorization: Bearer <token>` header
 - All admin endpoints work through `AdminApi` or `AgentApi` service objects
+
+## Seeding the Database
+
+### Prerequisites
+- Railway CLI authenticated & linked (`railway login`, `railway link --project QuickSend --environment <env> --service backend-app`)
+- SSH key registered with Railway (`railway ssh keys add`)
+
+### Seed process
+1. **Update seed code** in `backend-app/prisma/seed.ts` if needed
+2. **Sync to rail-backend**: from `backend-app/`, run `Copy-Item prisma/seed.ts ../rail-backend/prisma/seed.ts -Force` then push rail-backend (`git -C ../rail-backend add -A; git -C ../rail-backend commit -m "sync seed"; git -C ../rail-backend push`)
+3. **Wait for Railway deploy** to complete (`railway status` shows `• Online` without "Building")
+4. **Run seed via SSH**: `railway ssh -s "backend-app" "npx tsx prisma/seed.ts"`
+
+### Known issues
+- Models use `String @id` without `@default()`. The seed must generate IDs using `genId()` (inlined in `seed.ts`) with prefixes from `src/utils/id-generator.ts`
+- The runner container has no `src/` directory — only `prisma/` and `dist/`. Any imports in seed code must be self-contained (no imports from `../src/`)
+- `AgentWallet` schema has no `walletType` field — do not include it in seed
+- The seed is idempotent: skips existing records by email/address lookup
+
+### Seed credentials
+| Role | Email | Password |
+|------|-------|----------|
+| SUPER_ADMIN | admin@quicksend.com | admin123 |
+| COMPLIANCE | compliance@quicksend.com | compliance123 |
+| OPS | ops@quicksend.com | ops123 |
+| TREASURY | treasury@quicksend.com | treasury123 |
+| PARTNER agent | partner@quicksend.com | partner123 |
+| INTERNAL agent | internal@quicksend.com | internal123 |
